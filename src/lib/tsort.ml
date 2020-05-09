@@ -2,10 +2,13 @@
 
    Usage example: sort [("foundation", []); ("basement", ["foundation"]);]
 
-   Author: Daniil Baturin, 2019
- *)
+   Authors: Daniil Baturin (2019), Martin Jambon (2020).
+*)
 
-type 'a sort_result = Sorted of 'a list | ErrorNonexistent of 'a list | ErrorCycle of 'a list
+type 'a sort_result =
+  | Sorted of 'a list
+  | ErrorNonexistent of 'a list
+  | ErrorCycle of 'a list
 
 (* Finds "isolated" nodes,
    that is, nodes that have no dependencies *)
@@ -105,7 +108,12 @@ module Components = struct
 
     let transpose tbl =
       let tbl2 = Hashtbl.create 100 in
+      let init v =
+        if not (Hashtbl.mem tbl2 v) then
+          Hashtbl.add tbl2 v []
+      in
       Hashtbl.iter (fun u vl ->
+        init u;
         List.iter (fun v ->
           let ul =
             try Hashtbl.find tbl2 v
@@ -133,7 +141,7 @@ module Components = struct
       |> List.rev
     in
     List.iter (fun (v, vl) -> Hashtbl.replace graph v vl) missing;
-    graph_l @ (List.rev missing)
+    graph_l @ missing
 
   (*
      Sort the results of 'partition' so as to follow the original node
