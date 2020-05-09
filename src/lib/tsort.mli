@@ -7,7 +7,12 @@ type 'a sort_result =
   | ErrorNonexistent of 'a list
   | ErrorCycle of 'a list
 
-(** Perform a normal topological sort on a directed acyclic graph (DAG). *)
+(** Perform a normal topological sort on a directed acyclic graph (DAG).
+
+    The result is in "dependency order", i.e. if there's an edge from
+    A to B, then B comes first. For example,
+    [sort [1, [2]; 2, []]] returns [[2; 1]].
+*)
 val sort : ('a * 'a list) list -> 'a sort_result
 
 (** Dealing with cyclic graphs.
@@ -31,7 +36,7 @@ module Components : sig
 
      The theoretical complexity of the Kosaraju-Sharir algorithm is
      O(n) = O(|V|+|E|) but due to the use of resizable hash tables and a final
-     sorting pass, it's O(n log n).
+     sorting pass, the complexity of this implementation is O(n log n).
   *)
   val partition : ('a * 'a list) list -> 'a list list
 end

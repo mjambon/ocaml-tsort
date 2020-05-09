@@ -50,7 +50,7 @@ let test_tsort () =
     Sorted [7; 6; 4; 5; 3; 2; 1]
   )
 
-let test_partition () =
+let test_component_partition () =
   let p graph =
     printf "input: %s\n%!" (fmt_graph graph);
     let partition = Tsort.Components.partition graph in
@@ -86,13 +86,33 @@ let test_partition () =
     = [[1]; [2; 3; 4]; [5]]
   )
 
+let test_component_sort () =
+  let sort graph =
+    printf "input: %s\n%!" (fmt_graph graph);
+    let components = Tsort.Components.sort graph in
+    printf "output: %s\n%!" (fmt_partition components);
+    components
+  in
+  assert (sort [] = []);
+  assert (sort [0,[]] = [[0]]);
+  assert (
+    sort [
+      1, [2];
+      2, [3; 4];
+      3, [4];
+      4, [2; 5]
+    ]
+    = [[5]; [2; 3; 4]; [1]]
+  )
+
 let main () =
   Alcotest.run "Tsort" [
     "Tsort", [
       "sort", `Quick, test_tsort;
     ];
     "Tsort.Components", [
-      "partition", `Quick, test_partition;
+      "partition", `Quick, test_component_partition;
+      "sort", `Quick, test_component_sort;
     ];
   ]
 

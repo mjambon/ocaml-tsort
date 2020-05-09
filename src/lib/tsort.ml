@@ -53,13 +53,17 @@ let find_nonexistent_nodes nodes =
       else find_aux ns (n :: nonexistent)
     | [] -> nonexistent
   in
-  let nonexistent = List.fold_left (fun acc (_, vs) -> List.append acc (find_aux vs [])) [] nodes in
+  let nonexistent =
+    List.fold_left (fun acc (_, vs) ->
+      List.append acc (find_aux vs [])
+    ) [] nodes in
   CCList.uniq ~eq:(=) nonexistent
 
 (* The Kahn's algorithm:
-    1. Find nodes that have no dependencies ("isolated") and remove them from the graph hash.
-       Add them to the initial sorted nodes list and the list of isolated nodes for the
-       first sorting pass.
+    1. Find nodes that have no dependencies ("isolated") and remove them from
+       the graph hash.
+       Add them to the initial sorted nodes list and the list of isolated
+       nodes for the first sorting pass.
     2. For every isolated node, walk through the remaining nodes and
        remove it from their dependency list.
        Nodes that only depended on it now have empty dependency lists.
@@ -76,10 +80,11 @@ let sort nodes =
       let () = remove_dependency hash dep in
       let isolated_nodes = find_isolated_nodes hash in
       let () = remove_nodes isolated_nodes hash in
-      sorting_loop (List.append deps isolated_nodes) hash (List.append acc isolated_nodes)
+      sorting_loop
+        (List.append deps isolated_nodes) hash (List.append acc isolated_nodes)
   in
   let nodes_hash = CCHashtbl.of_list nodes in
-  let base_nodes = find_isolated_nodes nodes_hash in 
+  let base_nodes = find_isolated_nodes nodes_hash in
   let () = remove_nodes base_nodes nodes_hash in
   let sorted_node_ids = sorting_loop base_nodes nodes_hash [] in
   let sorted_node_ids = List.append base_nodes sorted_node_ids in
@@ -168,7 +173,7 @@ module Components = struct
      Implementation of Kosaraju's algorithm for partitioning a graph into its
      strongly connected components.
   *)
-  let partition graph_l =
+  let partition_full graph_l =
     let graph = Graph.create graph_l in
     let graph_l = add_missing_nodes graph_l graph in
     let tr_graph = Graph.transpose graph in
@@ -226,8 +231,62 @@ module Components = struct
     let partition =
       Hashtbl.fold (fun _id members acc -> members :: acc) clusters []
     in
-    sort_partition graph_l partition
+    graph_l, sort_partition graph_l partition
 
-  let sort _graph_l =
-    failwith "TODO"
+  let partition graph_l =
+    let _completed_graph_l, components = partition_full graph_l in
+    components
+
+  (*
+     Algorithm:
+     1. Identify the strongly-connected components of the input graph.
+     2. Derive a DAG from merging the nodes within each component
+        (condensation).
+     3. Topologically-sort that DAG.
+     4. Re-expand the nodes representing components into the original nodes.
+  *)
+  let sort graph_l =
+    let graph_l, components = partition_full graph_l in
+    let index = Hashtbl.create 100 in
+    let rev_index = Hashtbl.create 100 in
+    List.iteri (fun id comp ->
+      List.iter (fun v ->
+        Hashtbl.add index v id;
+        Hashtbl.add rev_index id comp
+      ) comp
+    ) components;
+
+    let get_comp_id v =
+      try Hashtbl.find index v
+      with Not_found -> assert false
+    in
+    let get_comp_members id =
+      try Hashtbl.find rev_index id
+      with Not_found -> assert false
+    in
+    let condensation =
+      let tbl = Hashtbl.create 100 in
+      List.iter (fun (u, vl) ->
+        let id = get_comp_id u in
+        let idl0 =
+          try Hashtbl.find tbl id
+          with Not_found -> []
+        in
+        let idl = List.map get_comp_id vl @ idl0 in
+        Hashtbl.replace tbl id idl
+      ) graph_l;
+      Hashtbl.fold (fun id idl acc ->
+        (* Remove v->v edges because they are not supported by tsort.
+           Duplicates seem ok. *)
+        let filtered = List.filter ((<>) id) idl in
+        (id, filtered) :: acc
+      ) tbl []
+    in
+    let sorted_components =
+      match sort condensation with
+      | Sorted comp_ids -> List.map get_comp_members comp_ids
+      | ErrorNonexistent _ -> assert false
+      | ErrorCycle _ -> assert false
+    in
+    sorted_components
 end
